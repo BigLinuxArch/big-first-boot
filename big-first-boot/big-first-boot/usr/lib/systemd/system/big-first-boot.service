@@ -1,0 +1,10 @@
+[Unit]
+Description=Prepare the system after installation
+Before=auto-unlock-pacman.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/big-first-boot
+
+[Install]
+WantedBy=multi-user.target

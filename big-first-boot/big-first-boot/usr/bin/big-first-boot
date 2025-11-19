@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# Fix some slowdown in network
+# systemctl stop NetworkManager-wait-online
+# systemctl disable NetworkManager-wait-online
+
+if grep -q wayland /proc/cmdline; then
+
+echo '[General]
+DisplayServer=wayland
+GreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell
+
+[Wayland]
+CompositorCommand=kwin_wayland --drm --no-lockscreen --no-global-shortcuts --locale1 --inputmethod maliit-keyboard' > /etc/sddm.conf.d/10-wayland.conf
+
+sed -i 's|livecd.desktop|livecdWayland.desktop|g' /etc/sddm.conf
+
+echo '[Last]
+Session=/usr/share/wayland-sessions/plasmawayland.desktop' > /var/lib/sddm/state.conf
+
+else
+    if [[ -e /etc/gdm/custom.conf ]]; then
+        sed -i 's| *#*WaylandEnable=false|WaylandEnable=false|g' /etc/gdm/custom.conf
+    fi
+
+    if [[ -e /etc/sddm.conf.d/10-wayland.conf ]]; then
+        rm -f /etc/sddm.conf.d/10-wayland.conf
+    fi
+fi
+
+if [ ! -e "/livefs-pkgs.txt" ]; then
+
+    #Enable automatic update grub and configure timeshift
+     if [ "$(grep btrfs /etc/fstab)" != "" ]; then
+#         sed -i 's|^ *\bPathModified\b *=.*|PathModified=/run/timeshift/backup/timeshift-btrfs/snapshots|' /usr/lib/systemd/system/grub-btrfs.path
+#         systemctl reenable grub-btrfs.path
+#         systemctl start grub-btrfs
+
+        sed -i '/ExecStart=/s/.*/ExecStart=\/usr\/bin\/grub-btrfsd --syslog --timeshift-auto/' /usr/lib/systemd/system/grub-btrfsd.service
+        systemctl enable --now grub-btrfsd.service
+        
+        timeshift --btrfs
+        sed -i 's|"schedule_daily" : "false"|"schedule_daily" : "true"|g;s|"btrfs_mode" : "false"|"btrfs_mode" : "true"|g' /etc/timeshift/default.json
+        sed -i 's|"schedule_daily" : "false"|"schedule_daily" : "true"|g;s|"btrfs_mode" : "false"|"btrfs_mode" : "true"|g;s|"btrfs_use_qgroup" : "true"|"btrfs_use_qgroup" : "false"|g' /etc/timeshift/timeshift.json
+        timeshift --check
+        if [ "$(grep grub-btrfs /boot/grub/grub.cfg)" != "" ]; then
+            /etc/grub.d/41_snapshots-btrfs
+            update-grub
+        fi
+     fi
+    
+    # only in x86_64
+    if [ "$(uname -m)" = "x86_64" ];then
+        vbox=$(lspci | grep -i "virtualbox")
+        qemu=$(lspci | grep -i "virtio")
+        if [ -z "$vbox" ]; then
+            rm_vbox="virtualbox-guest-utils"
+        fi
+
+        if [ -z "$qemu" ]; then
+            rm_spice="spice-vdagent spice-vdagent-autostart-kde"
+        fi
+        
+        if [ -z "$vbox" -a -z "$qemu" ];then
+            rm_virt="open-vm-tools qemu-guest-agent libdnet gdk-pixbuf-xlib uriparser libmspack xf86-input-vmmouse"
+        fi
+
+        #pacman -R --noconfirm linux414-headers
+        pacman -R --noconfirm $rm_spice
+        pacman -R --noconfirm $rm_vbox
+        pacman -R --noconfirm $rm_virt
+        pacman -R --noconfirm big-first-boot
+    
+        # Ativar render-menu-options
+        # User
+        for user in $(awk -F':' '{ if ($3 >= 1000 && $1 != "nobody") print $1 }' /etc/passwd); do
+            if [ -e /home/"${user}"/.local/share/applications ];then
+                /usr/share/render-menu-options/render-menu-options.sh "/home/"${user}"/.local/share/applications/"
+            fi
+        done
+        # Nativos
+        /usr/share/render-menu-options/render-menu-options.sh '/usr/share/applications/'
+        # Flatpak
+        /usr/share/render-menu-options/render-menu-options.sh '/var/lib/flatpak/exports/share/applications'
+    
+    # only in ARM64
+    # elif [ "$(uname -m)" = "aarch64" ];then
+    fi
+    
+    # mostrar * ao digitar senha no terminal
+    echo "Defaults pwfeedback" | tee -a /etc/sudoers
+    
+    # Fix polkit error
+    rm /etc/pam.d/polkit-1
+fi
+
