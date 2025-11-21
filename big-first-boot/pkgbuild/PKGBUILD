@@ -1,13 +1,13 @@
 # Maintainer: Bruno Goncalves <bigbruno@gmail.com>
 
 pkgname=big-first-boot
-pkgver=$(date +%y.%m.%d)
-pkgrel=$(date +%H%M)
+pkgver=24.06.15
+pkgrel=0152
 arch=('any')
 license=('GPL')
 url="https://github.com/biglinux/big-first-boot"
 pkgdesc="Configuration in first boot after install in hd"
-source=("git+https://github.com/biglinux/big-first-boot.git")
+source=("git+https://github.com/biglinux/big-first-boot.git#branch=stable-2024-06-14")
 md5sums=(SKIP)
 
 package() {
